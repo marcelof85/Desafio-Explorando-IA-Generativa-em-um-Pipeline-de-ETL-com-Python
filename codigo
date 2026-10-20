@@ -1,0 +1,68 @@
+from datetime import datetime
+from pathlib import Path
+import pandas as pd
+import requests
+
+PASTA_ATUAL = Path(__file__).resolve().parent
+caminho_csv = PASTA_ATUAL / 'clientes.csv'
+caminho_csv_2 = PASTA_ATUAL / 'campanhas.csv'
+
+if not caminho_csv.exists():
+  raise FileNotFoundError(
+      f'Arquivo de entrada não encontrado: {caminho_csv}. Verifique se o'
+      ' clientes.csv está na mesma pasta do script.'
+  )
+
+df = pd.read_csv(caminho_csv)
+
+agora = datetime.now()
+
+data_formatada = agora.strftime("%d-%m-%Y")
+
+user_ids = df['ID'].tolist()
+
+def user_info(id, df):
+    cliente = df[df['ID'] == id]
+    if cliente.empty:
+        return None
+    cliente = cliente.iloc[0]
+    return (
+        f"{cliente['nome']} tem R$ {cliente['saldo']} em conta e cartão com"
+        f" limite de R$ {cliente['limite_cartao']}."
+    )
+
+def pedido_mensagem(id, df):
+    usuario = user_info(id, df)
+    prompt = (
+        'Gere uma mensagem curta de marketing bancário com no máximo 20 palavras'
+        f' para o cliente: {usuario}'
+    )
+
+    url = f'https://text.pollinations.ai/{prompt}'
+    response = requests.get(url)
+
+    if response.status_code == 200:
+        return response.text.strip()
+    return 'Aproveite as condições exclusivas para seu perfil bancário!'
+
+mensagens_geradas = []
+
+for id in user_ids:
+    texto = pedido_mensagem(id, df)
+    print(f'Gerado para ID {id}: {texto}')
+    mensagens_geradas.append(
+        {'id_cliente': id, 'data': data_formatada, 'mensagem': texto}
+    )
+
+arquivo_existe = caminho_csv_2.exists()
+
+df_novas = pd.DataFrame(mensagens_geradas)
+
+df_novas.to_csv(
+    caminho_csv_2,
+    mode='a',
+    index=False,
+    header=not arquivo_existe,
+)
+
+print('\ncampanhas.csv atualizado com sucesso!')
